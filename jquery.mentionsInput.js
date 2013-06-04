@@ -18,7 +18,7 @@
     onDataRequest   : $.noop,
     minChars        : 2,
     showAvatars     : true,
-    elastic       : true,
+    elastic         : true,
     classes         : {
       autoCompleteItemActive : "active"
     },
@@ -201,8 +201,17 @@
     function addMention(mention) {
 
       var currentMessage = getInputBoxValue();
-
-      if (settings.fullNameTrigger) {
+      var value = mention.value;
+      
+      // Using a regex to figure out positions
+      var regex = new RegExp("\\" + settings.triggerChar + currentDataQuery, "gi");
+      var result = regex.exec(currentMessage);
+      
+      if (result) {
+        var startCaretPosition = regex.lastIndex - currentDataQuery.length - 1;
+        var currentCaretPosition = regex.lastIndex;
+        
+      } else if (settings.fullNameTrigger) {
         // Get the actual carat position using some black magic
         var currentCaretPosition = cursorEndPosition;
         var startCaretPosition = currentCaretPosition - currentDataQuery.length;
@@ -213,14 +222,6 @@
         if(curMessage.substring(curMessage.length - matchLen) ==  value.substring(0, matchLen)){
           startCaretPosition -= value.indexOf(currentDataQuery);
         }
-      }
-      else {
-        // Using a regex to figure out positions
-        var regex = new RegExp("\\" + settings.triggerChar + currentDataQuery, "gi");
-        regex.exec(currentMessage);
-
-        var startCaretPosition = regex.lastIndex - currentDataQuery.length - 1;
-        var currentCaretPosition = regex.lastIndex;
       }
 
       var start = currentMessage.substr(0, startCaretPosition);
@@ -268,22 +269,26 @@
     function onInputBoxInput(e) {
       updateValues();
       updateMentionsCollection();
+      hideAutoComplete();
 
+      var triggered = true;
       var space_index = _.lastIndexOf(inputBuffer, " ");
       if (space_index > -1) {
         inputBuffer = inputBuffer.slice(space_index + 1);
       }
-
-      if (settings.fullNameTrigger)
-        currentDataQuery = inputBuffer.join('');
-      else {
-        var triggerCharIndex = _.lastIndexOf(inputBuffer, settings.triggerChar);
-        if (triggerCharIndex > -1) {
-          currentDataQuery = inputBuffer.slice(triggerCharIndex + 1).join('');
-          currentDataQuery = utils.rtrim(currentDataQuery);
-        }
+      
+      var triggerCharIndex = _.lastIndexOf(inputBuffer, settings.triggerChar);
+      if (triggerCharIndex > -1) {
+        currentDataQuery = inputBuffer.slice(triggerCharIndex + 1).join('');
+        currentDataQuery = utils.rtrim(currentDataQuery);
       }
-      _.defer(_.bind(doSearch, this, currentDataQuery));
+      
+      if (settings.fullNameTrigger && triggerCharIndex == -1) {
+        currentDataQuery = inputBuffer.join('');
+        triggered = false;
+      }
+      
+      _.defer(_.bind(doSearch, this, currentDataQuery, triggered));
     }
 
     function onInputBoxKeyPress(e) {
@@ -294,6 +299,12 @@
     }
 
     function onInputBoxKeyDown(e) {
+      
+      if (e.keyCode == KEY.ESC) {
+          hideAutoComplete();
+          resetBuffer();
+      }
+      
       // This also matches HOME/END on OSX which is CMD+LEFT, CMD+RIGHT
       if (e.keyCode == KEY.LEFT || e.keyCode == KEY.RIGHT || e.keyCode == KEY.HOME || e.keyCode == KEY.END) {
         // Defer execution to ensure carat pos has changed after HOME/END keys
@@ -414,9 +425,10 @@
       elmDropDownList.show();
     }
 
-    function doSearch(query) {
+    function doSearch(query, triggered) {
       if (query && query.length && query.length >= settings.minChars) {
-        if (settings.fullNameTrigger) {
+
+        if (settings.fullNameTrigger && !triggered) {
           doSearchFullNameTrigger(query);
         } else {
           settings.onDataRequest.call(this, 'search', query, function (responseData) {
@@ -438,8 +450,6 @@
           currentDataQuery = query;
           populateDropdown(query, responseData);
         });
-      } else {
-        hideAutoComplete();
       }
     }
 
