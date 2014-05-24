@@ -1,9 +1,10 @@
 /*
  * Mentions Input
- * Version 1.0.2
+ * Version 1.0.3
  * Written by: Kenneth Auchenberg (Podio)
+ * Adapted by: Tom Moor
  *
- * Using underscore.js
+ * https://github.com/sqwiggle/jquery-mentions-input
  *
  * License: MIT License - http://www.opensource.org/licenses/mit-license.php
  */
@@ -86,6 +87,7 @@
       elmWrapperBox = elmInputWrapper.find('> div');
 
       elmInputBox.attr('data-mentions-input', 'true');
+      elmInputBox.bind('keyup', onInputBoxKeyUp);
       elmInputBox.bind('keydown', onInputBoxKeyDown);
       elmInputBox.bind('keypress', onInputBoxKeyPress);
       elmInputBox.bind('input', onInputBoxInput);
@@ -245,6 +247,14 @@
       }
     }
 
+    function onInputBoxKeyUp(e) {
+        // if backspace and nothing left in input, hide the mentions dropdown
+        if (e.keyCode == KEY.BACKSPACE && !getInputBoxValue()) {
+            hideAutoComplete();
+            return false;
+        }
+    }
+    
     function onInputBoxKeyDown(e) {
 
       // This also matches HOME/END on OSX which is CMD+LEFT, CMD+RIGHT
