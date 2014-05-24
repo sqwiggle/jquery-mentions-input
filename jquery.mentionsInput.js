@@ -13,20 +13,20 @@
   // Settings
   var KEY = { BACKSPACE : 8, TAB : 9, RETURN : 13, ESC : 27, LEFT : 37, UP : 38, RIGHT : 39, DOWN : 40, COMMA : 188, SPACE : 32, HOME : 36, END : 35 }; // Keys "enum"
   var defaultSettings = {
-    triggerChar     : '@',
-    fullNameTrigger : false,
-    onDataRequest   : $.noop,
-    minChars        : 2,
-    showAvatars     : true,
-    elastic         : true,
-    classes         : {
+    triggerChar   : '@',
+    onDataRequest : $.noop,
+    minChars      : 2,
+    showAvatars   : true,
+    elastic       : true,
+    onCaret       : false,
+    classes       : {
       autoCompleteItemActive : "active"
     },
-    templates       : {
+    templates     : {
       wrapper                    : _.template('<div class="mentions-input-box"></div>'),
       autocompleteList           : _.template('<div class="mentions-autocomplete-list"></div>'),
       autocompleteListItem       : _.template('<li data-ref-id="<%= id %>" data-ref-type="<%= type %>" data-display="<%= display %>"><%= content %></li>'),
-      autocompleteListItemAvatar : _.template('<img src="<%= avatar %>" />'),
+      autocompleteListItemAvatar : _.template('<img  src="<%= avatar %>" />'),
       autocompleteListItemIcon   : _.template('<div class="icon <%= icon %>"></div>'),
       mentionsOverlay            : _.template('<div class="mentions"><div></div></div>'),
       mentionItemSyntax          : _.template('@[<%= value %>](<%= type %>:<%= id %>)'),
@@ -58,48 +58,6 @@
         }
       }
     },
-    getCaratPosition : function (domNode) {
-      if(typeof(domNode.selectionStart) == "number") {
-        start = domNode.selectionStart;
-        end = domNode.selectionEnd;
-      }
-
-      else if(document.selection) {
-        var range = document.selection.createRange();
-        if (range.parentElement().id == domNode.id) {
-          // Create a selection of the whole textarea
-          var range_all = document.body.createTextRange();
-          range_all.moveToElementText(domNode);
-
-          // Calculate selection start point by moving beginning of range_all to beginning of range
-          for (start=0; range_all.compareEndPoints("StartToStart", range) < 0; start++) {
-            range_all.moveStart('character', 1);
-          }
-
-          for (var i = 0; i <= start; i ++) {
-            if (domNode.value.charAt(i) == '\n')
-            start++;
-          }
-
-          // Create a selection of the whole textarea
-          var range_all = document.body.createTextRange();
-          range_all.moveToElementText(domNode);
-
-          // Calculate selection end point by moving beginning of range_all to end of range
-          for (end = 0; range_all.compareEndPoints('StartToEnd', range) < 0; end ++) {
-            range_all.moveStart('character', 1);
-          }
-
-          // Get number of line breaks from textarea start to selection end and add them to end
-          for (var i = 0; i <= end; i ++){
-            if (domNode.value.charAt(i) == '\n') {
-              end ++;
-            }
-          }
-        }
-      }
-      return end;
-    },
     rtrim: function(string) {
       return string.replace(/\s+$/,"");
     }
@@ -112,7 +70,6 @@
     var autocompleteItemCollection = {};
     var inputBuffer = [];
     var currentDataQuery;
-    var cursorEndPosition;
 
     settings = $.extend(true, {}, defaultSettings, settings );
 
@@ -140,9 +97,6 @@
         elmInputBox.elastic();
       }
 
-      if (settings.fullNameTrigger) {
-        elmInputBox.bind('keyup mousedown mouseup focus', saveCursorPosition);
-      }
     }
 
     function initAutocomplete() {
@@ -154,10 +108,6 @@
     function initMentionsOverlay() {
       elmMentionsOverlay = $(settings.templates.mentionsOverlay());
       elmMentionsOverlay.prependTo(elmWrapperBox);
-    }
-
-    function saveCursorPosition(e) {
-      cursorEndPosition = utils.getCaratPosition(e.target);
     }
 
     function updateValues() {
@@ -201,28 +151,13 @@
     function addMention(mention) {
 
       var currentMessage = getInputBoxValue();
-      var value = mention.value;
-      
+
       // Using a regex to figure out positions
       var regex = new RegExp("\\" + settings.triggerChar + currentDataQuery, "gi");
-      var result = regex.exec(currentMessage);
-      
-      if (result) {
-        var startCaretPosition = regex.lastIndex - currentDataQuery.length - 1;
-        var currentCaretPosition = regex.lastIndex;
-        
-      } else if (settings.fullNameTrigger) {
-        // Get the actual carat position using some black magic
-        var currentCaretPosition = cursorEndPosition;
-        var startCaretPosition = currentCaretPosition - currentDataQuery.length;
+      regex.exec(currentMessage);
 
-        // Find where to start inserting mention
-        var matchLen = value.indexOf(currentDataQuery) + currentDataQuery.length;
-        var curMessage = currentMessage.substring(0, currentCaretPosition);
-        if(curMessage.substring(curMessage.length - matchLen) ==  value.substring(0, matchLen)){
-          startCaretPosition -= value.indexOf(currentDataQuery);
-        }
-      }
+      var startCaretPosition = regex.lastIndex - currentDataQuery.length - 1;
+      var currentCaretPosition = regex.lastIndex;
 
       var start = currentMessage.substr(0, startCaretPosition);
       var end = currentMessage.substr(currentCaretPosition, currentMessage.length);
@@ -249,6 +184,29 @@
       return $.trim(elmInputBox.val());
     }
 
+    // This is taken straight from live (as of Sep 2012) GitHub code. The
+    // technique is known around the web. Just google it. Github's is quite
+    // succint though. NOTE: relies on selectionEnd, which as far as IE is concerned,
+    // it'll only work on 9+. Good news is nothing will happen if the browser
+    // doesn't support it.
+    function textareaSelectionPosition($el) {
+      var a, b, c, d, e, f, g, h, i, j, k;
+      if (!(i = $el[0])) return;
+      if (!$(i).is("textarea")) return;
+      if (i.selectionEnd == null) return;
+      g = {
+        position: "absolute",
+        overflow: "auto",
+        whiteSpace: "pre-wrap",
+        wordWrap: "break-word",
+        boxSizing: "content-box",
+        top: 0,
+        left: -9999
+      }, h = ["boxSizing", "fontFamily", "fontSize", "fontStyle", "fontVariant", "fontWeight", "height", "letterSpacing", "lineHeight", "paddingBottom", "paddingLeft", "paddingRight", "paddingTop", "textDecoration", "textIndent", "textTransform", "width", "word-spacing"];
+      for (j = 0, k = h.length; j < k; j++) e = h[j], g[e] = $(i).css(e);
+      return c = document.createElement("div"), $(c).css(g), $(i).after(c), b = document.createTextNode(i.value.substring(0, i.selectionEnd)), a = document.createTextNode(i.value.substring(i.selectionEnd)), d = document.createElement("span"), d.innerHTML = "&nbsp;", c.appendChild(b), c.appendChild(d), c.appendChild(a), c.scrollTop = i.scrollTop, f = $(d).position(), $(c).remove(), f
+    }
+
     function onAutoCompleteItemClick(e) {
       var elmTarget = $(this);
       var mention = autocompleteItemCollection[elmTarget.attr('data-uid')];
@@ -271,24 +229,13 @@
       updateMentionsCollection();
       hideAutoComplete();
 
-      var triggered = true;
-      var space_index = _.lastIndexOf(inputBuffer, " ");
-      if (space_index > -1) {
-        inputBuffer = inputBuffer.slice(space_index + 1);
-      }
-      
       var triggerCharIndex = _.lastIndexOf(inputBuffer, settings.triggerChar);
       if (triggerCharIndex > -1) {
         currentDataQuery = inputBuffer.slice(triggerCharIndex + 1).join('');
         currentDataQuery = utils.rtrim(currentDataQuery);
+
+        _.defer(_.bind(doSearch, this, currentDataQuery));
       }
-      
-      if (settings.fullNameTrigger && triggerCharIndex == -1) {
-        currentDataQuery = inputBuffer.join('');
-        triggered = false;
-      }
-      
-      _.defer(_.bind(doSearch, this, currentDataQuery, triggered));
     }
 
     function onInputBoxKeyPress(e) {
@@ -299,12 +246,7 @@
     }
 
     function onInputBoxKeyDown(e) {
-      
-      if (e.keyCode == KEY.ESC) {
-          hideAutoComplete();
-          resetBuffer();
-      }
-      
+
       // This also matches HOME/END on OSX which is CMD+LEFT, CMD+RIGHT
       if (e.keyCode == KEY.LEFT || e.keyCode == KEY.RIGHT || e.keyCode == KEY.HOME || e.keyCode == KEY.END) {
         // Defer execution to ensure carat pos has changed after HOME/END keys
@@ -349,6 +291,10 @@
 
           return false;
 
+        case KEY.ESC:
+          hideAutoComplete();
+          return false;
+            
         case KEY.RETURN:
         case KEY.TAB:
           if (elmActiveAutoCompleteItem && elmActiveAutoCompleteItem.length) {
@@ -400,8 +346,7 @@
           'id'      : utils.htmlEncode(item.id),
           'display' : utils.htmlEncode(item.name),
           'type'    : utils.htmlEncode(item.type),
-          'content' : utils.highlightTerm(utils.htmlEncode((item.name)), query),
-          'item'    : item
+          'content' : utils.highlightTerm(utils.htmlEncode((item.display ? item.display : item.name)), query)
         })).attr('data-uid', itemUid);
 
         if (index === 0) {
@@ -422,35 +367,25 @@
       });
 
       elmAutocompleteList.show();
+      if (settings.onCaret) positionAutocomplete(elmAutocompleteList, elmInputBox);
       elmDropDownList.show();
     }
 
-    function doSearch(query, triggered) {
+    function doSearch(query) {
       if (query && query.length && query.length >= settings.minChars) {
-
-        if (settings.fullNameTrigger && !triggered) {
-          doSearchFullNameTrigger(query);
-        } else {
-          settings.onDataRequest.call(this, 'search', query, function (responseData) {
-            populateDropdown(query, responseData);
-          });
-        }
-      }
-    }
-
-    function doSearchFullNameTrigger(query) {
-      query = query.substring(query.lastIndexOf(" ") + 1);
-      var regexp = /[A-Z][a-z]/g;
-      var arr = query.match(regexp);
-      if(arr) {
-        query = query.substring(query.lastIndexOf(arr[arr.length - 1]));
-        if(query.length < settings.minChars) { return; }
-
         settings.onDataRequest.call(this, 'search', query, function (responseData) {
-          currentDataQuery = query;
           populateDropdown(query, responseData);
         });
       }
+    }
+
+    function positionAutocomplete(elmAutocompleteList, elmInputBox) {
+      var position = textareaSelectionPosition(elmInputBox),
+          lineHeight = parseInt(elmInputBox.css('line-height'), 10) || 18;
+      elmAutocompleteList.css('width', '15em'); // Sort of a guess
+      elmAutocompleteList.css('left', position.left);
+      elmAutocompleteList.css('bottom', lineHeight + position.top);
+      elmAutocompleteList.css('top', 'auto');
     }
 
     function resetInput() {
@@ -500,6 +435,7 @@
   };
 
   $.fn.mentionsInput = function (method, settings) {
+
     var outerArguments = arguments;
 
     if (typeof method === 'object' || !method) {
